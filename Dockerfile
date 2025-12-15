@@ -1,24 +1,22 @@
-FROM eclipse-temurin:17-jdk-jammy
-
+# ---------- Build stage ----------
+FROM eclipse-temurin:17-jdk-jammy AS build
 WORKDIR /app
 
-# Copy Maven build files
 COPY pom.xml .
 COPY mvnw .
 COPY .mvn .mvn
 RUN chmod +x mvnw
-
-# Download dependencies (cache for faster builds)
 RUN ./mvnw dependency:go-offline
 
-# Copy the source code
-COPY src ./src
-
-# Package the application
+COPY src src
 RUN ./mvnw clean package -DskipTests
 
-# Expose port (same as Spring Boot server.port)
+# ---------- Runtime stage ----------
+FROM eclipse-temurin:17-jre-jammy
+WORKDIR /app
+
+COPY --from=build /app/target/*.jar app.jar
+
 EXPOSE 8080
 
-# Run the Spring Boot application
-CMD ["java", "-jar", "target/crm-0.0.1-SNAPSHOT.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
