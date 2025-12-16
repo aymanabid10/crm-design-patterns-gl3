@@ -45,7 +45,10 @@ public class SwaggerConfig {
                 .servers(List.of(
                         new Server()
                                 .url("http://localhost:8080")
-                                .description("Serveur de développement")
+                                .description("Serveur de développement"),
+                        new Server()
+                                .url("https://crm-design-patterns-gl3.onrender.com")
+                                .description("Serveur de production")
                 ));
     }
 }
