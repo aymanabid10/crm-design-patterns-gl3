@@ -19,16 +19,26 @@ const getStatusColor = (status: string) => {
 export default function LeadsPage() {
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<any>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
+  const [duplicates, setDuplicates] = useState<any[][]>([]);
 
   const {
     data: leads,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["leads"],
+    queryKey: ["leads", statusFilter],
     queryFn: async () => {
-      const response = await leadService.fetchAll();
-      return response.data;
+      if (statusFilter === "ALL") {
+        const response = await leadService.fetchAll();
+        return response.data;
+      } else {
+        const response = await leadService.fetchByStatus(statusFilter);
+        return response.data;
+      }
     },
   });
 
@@ -70,6 +80,45 @@ export default function LeadsPage() {
     },
   });
 
+  const disqualifyMutation = useMutation({
+    mutationFn: (id: number) => leadService.disqualifyLead(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+
+  const contactMutation = useMutation({
+    mutationFn: (id: number) => leadService.markAsContacted(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+
+  const mergeMutation = useMutation({
+    mutationFn: ({
+      sourceId,
+      targetId,
+    }: {
+      sourceId: number;
+      targetId: number;
+    }) => leadService.mergeLeads(sourceId, targetId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      setShowDuplicatesModal(false);
+      setDuplicates([]);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<CreateLeadData> }) =>
+      leadService.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      setShowEditModal(false);
+      setSelectedLead(null);
+    },
+  });
+
   const handleCreateLead = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -85,6 +134,32 @@ export default function LeadsPage() {
       assignedTo: formData.get("assignedTo") as string,
     };
     createMutation.mutate(data);
+  };
+
+  const handleEditLead = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedLead) return;
+    const formData = new FormData(e.currentTarget);
+    const data: Partial<CreateLeadData> = {
+      firstName: formData.get("firstName") as string,
+      lastName: formData.get("lastName") as string,
+      phone: (formData.get("phone") as string) || undefined,
+      company: (formData.get("company") as string) || undefined,
+      jobTitle: (formData.get("jobTitle") as string) || undefined,
+      notes: (formData.get("notes") as string) || undefined,
+    };
+    updateMutation.mutate({ id: selectedLead.id, data });
+  };
+
+  const handleFindDuplicates = async () => {
+    try {
+      const response = await leadService.fetchDuplicates();
+      setDuplicates(response.data);
+      setShowDuplicatesModal(true);
+    } catch (error) {
+      console.error("Error fetching duplicates:", error);
+      alert("Failed to fetch duplicates");
+    }
   };
 
   if (isLoading) {
@@ -298,6 +373,148 @@ export default function LeadsPage() {
         </div>
       )}
 
+      {/* Edit Lead Modal */}
+      {showEditModal && selectedLead && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-50">
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+              <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+                <form onSubmit={handleEditLead}>
+                  <div className="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Edit Lead
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEditModal(false);
+                          setSelectedLead(null);
+                        }}
+                        className="text-gray-400 hover:text-gray-500"
+                      >
+                        <svg
+                          className="h-6 w-6"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            First Name *
+                          </label>
+                          <input
+                            type="text"
+                            name="firstName"
+                            required
+                            defaultValue={selectedLead.firstName}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Last Name *
+                          </label>
+                          <input
+                            type="text"
+                            name="lastName"
+                            required
+                            defaultValue={selectedLead.lastName}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Phone
+                        </label>
+                        <input
+                          type="tel"
+                          name="phone"
+                          defaultValue={selectedLead.phone || ""}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Company
+                          </label>
+                          <input
+                            type="text"
+                            name="company"
+                            defaultValue={selectedLead.company || ""}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Job Title
+                          </label>
+                          <input
+                            type="text"
+                            name="jobTitle"
+                            defaultValue={selectedLead.jobTitle || ""}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Notes
+                        </label>
+                        <textarea
+                          name="notes"
+                          rows={3}
+                          defaultValue={selectedLead.notes || ""}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                      </div>
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3">
+                        <p className="text-sm text-yellow-700">
+                          <strong>Note:</strong> Email, source, and assigned
+                          user cannot be changed after creation.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                    <button
+                      type="submit"
+                      disabled={updateMutation.isPending}
+                      className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 sm:ml-3 sm:w-auto disabled:opacity-50"
+                    >
+                      {updateMutation.isPending ? "Updating..." : "Update Lead"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEditModal(false);
+                        setSelectedLead(null);
+                      }}
+                      className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="sm:flex sm:items-center sm:justify-between">
@@ -307,7 +524,39 @@ export default function LeadsPage() {
               Track and manage your sales leads
             </p>
           </div>
-          <div className="mt-4 sm:mt-0">
+          <div className="mt-4 sm:mt-0 flex gap-3 items-center">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="ALL">All Status</option>
+              <option value="NEW">New</option>
+              <option value="CONTACTED">Contacted</option>
+              <option value="QUALIFIED">Qualified</option>
+              <option value="UNQUALIFIED">Unqualified</option>
+              <option value="CONVERTED">Converted</option>
+            </select>
+            <button
+              onClick={handleFindDuplicates}
+              type="button"
+              className="inline-flex items-center gap-x-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-orange-500 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 transition-all duration-200"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+              Find Duplicates
+            </button>
             <button
               onClick={() => setShowAddModal(true)}
               type="button"
@@ -523,21 +772,54 @@ export default function LeadsPage() {
                           </td>
                           <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                             <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={() => {
+                                  setSelectedLead(lead);
+                                  setShowEditModal(true);
+                                }}
+                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                              >
+                                Edit
+                              </button>
                               {lead.status === "NEW" && (
-                                <button
-                                  onClick={() =>
-                                    qualifyMutation.mutate({
-                                      id: lead.id,
-                                      score: 75,
-                                    })
-                                  }
-                                  className="inline-flex items-center px-3 py-1.5 border border-indigo-300 text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50"
-                                  disabled={qualifyMutation.isPending}
-                                >
-                                  {qualifyMutation.isPending
-                                    ? "Processing..."
-                                    : "Qualify"}
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() =>
+                                      contactMutation.mutate(lead.id)
+                                    }
+                                    className="inline-flex items-center px-3 py-1.5 border border-yellow-300 text-xs font-medium rounded-md text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-colors disabled:opacity-50"
+                                    disabled={contactMutation.isPending}
+                                  >
+                                    {contactMutation.isPending
+                                      ? "Contacting..."
+                                      : "Mark Contacted"}
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      qualifyMutation.mutate({
+                                        id: lead.id,
+                                        score: 75,
+                                      })
+                                    }
+                                    className="inline-flex items-center px-3 py-1.5 border border-indigo-300 text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50"
+                                    disabled={qualifyMutation.isPending}
+                                  >
+                                    {qualifyMutation.isPending
+                                      ? "Processing..."
+                                      : "Qualify"}
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      disqualifyMutation.mutate(lead.id)
+                                    }
+                                    className="inline-flex items-center px-3 py-1.5 border border-red-300 text-xs font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50"
+                                    disabled={disqualifyMutation.isPending}
+                                  >
+                                    {disqualifyMutation.isPending
+                                      ? "Processing..."
+                                      : "Disqualify"}
+                                  </button>
+                                </>
                               )}
                               {lead.status === "QUALIFIED" && (
                                 <button

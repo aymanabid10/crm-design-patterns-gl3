@@ -74,13 +74,28 @@ export interface CreateContactData {
 export const leadService = {
   fetchAll: () => apiClient.get<LeadData[]>("/api/leads"),
   fetchById: (id: number) => apiClient.get<LeadData>(`/api/leads/${id}`),
+  fetchByStatus: (status: string) =>
+    apiClient.get<LeadData[]>(`/api/leads/status/${status}`),
+  fetchStats: () =>
+    apiClient.get<Record<string, number>>("/api/leads/stats/count"),
+  fetchDuplicates: () => apiClient.get<LeadData[][]>("/api/leads/duplicates"),
+  fetchAssigned: (userId: string) =>
+    apiClient.get<LeadData[]>(`/api/leads/assigned/${userId}`),
   create: (data: CreateLeadData) =>
     apiClient.post<LeadData>("/api/leads", data),
   update: (id: number, data: Partial<CreateLeadData>) =>
     apiClient.put<LeadData>(`/api/leads/${id}`, data),
   qualifyLead: (id: number, score: number) =>
     apiClient.post<LeadData>(`/api/leads/${id}/qualify?score=${score}`),
+  disqualifyLead: (id: number) =>
+    apiClient.post<LeadData>(`/api/leads/${id}/disqualify`),
   convertLead: (id: number) => apiClient.post(`/api/leads/${id}/convert`),
+  markAsContacted: (id: number) =>
+    apiClient.post<LeadData>(`/api/leads/${id}/contact`),
+  mergeLeads: (sourceId: number, targetId: number) =>
+    apiClient.post(
+      `/api/leads/merge?sourceId=${sourceId}&targetId=${targetId}`
+    ),
   remove: (id: number) => apiClient.delete(`/api/leads/${id}`),
 };
 
@@ -88,6 +103,8 @@ export const leadService = {
 export const contactService = {
   fetchAll: () => apiClient.get<ContactData[]>("/api/contacts"),
   fetchById: (id: number) => apiClient.get<ContactData>(`/api/contacts/${id}`),
+  fetchByType: (type: string) =>
+    apiClient.get<ContactData[]>(`/api/contacts/type/${type}`),
   create: (data: CreateContactData) =>
     apiClient.post<ContactData>("/api/contacts", data),
   update: (id: number, data: Partial<CreateContactData>) =>
