@@ -467,12 +467,6 @@ export default function LeadsPage() {
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                         />
                       </div>
-                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3">
-                        <p className="text-sm text-yellow-700">
-                          <strong>Note:</strong> Email, source, and assigned
-                          user cannot be changed after creation.
-                        </p>
-                      </div>
                     </div>
                   </div>
                   <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
