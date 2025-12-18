@@ -22,8 +22,8 @@ export default function LeadsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
-  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
-  const [duplicates, setDuplicates] = useState<any[][]>([]);
+  const [, setShowDuplicatesModal] = useState(false);
+  const [, setDuplicates] = useState<any[][]>([]);
 
   const {
     data: leads,
@@ -94,20 +94,6 @@ export default function LeadsPage() {
     },
   });
 
-  const mergeMutation = useMutation({
-    mutationFn: ({
-      sourceId,
-      targetId,
-    }: {
-      sourceId: number;
-      targetId: number;
-    }) => leadService.mergeLeads(sourceId, targetId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      setShowDuplicatesModal(false);
-      setDuplicates([]);
-    },
-  });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<CreateLeadData> }) =>
